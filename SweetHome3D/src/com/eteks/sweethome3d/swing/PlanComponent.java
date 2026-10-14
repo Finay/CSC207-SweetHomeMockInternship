@@ -2004,10 +2004,10 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
   }
   
   /**
-   * Prints this component plan at the scale given in the home print attributes or at a scale 
+   * Prints current level plan at the scale given in the home print attributes or at a scale
    * that makes it fill <code>pageFormat</code> imageable size if this attribute is <code>null</code>.
    */
-  public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
+  public int printLevel(Graphics g, PageFormat pageFormat, int pageIndex) {
     List<Selectable> printedItems = getPaintedItems(); 
     Rectangle2D printedItemBounds = getItemsBounds(g, printedItems);
     if (printedItemBounds != null) {
@@ -2074,7 +2074,57 @@ public class PlanComponent extends JComponent implements PlanView, Scrollable, P
       return NO_SUCH_PAGE;
     }
   }
-  
+
+  /**
+   * Print all level plans at given scale
+   */
+  public int print(Graphics g, PageFormat pageFormat, int pageIndex) {
+    if (this.home.getLevels().isEmpty()) {
+      return printLevel(g, pageFormat, pageIndex);
+    }
+    Level oldSelectedLevel = this.home.getSelectedLevel();
+    try {
+      int levelFirstPageIndex = 0;
+      for (Level level : this.home.getLevels()) {
+        if (level.isViewable()) {
+          this.home.setSelectedLevel(level);
+          int levelPageCount = getSelectedLevelPageCount(g, pageFormat);
+          if (pageIndex < levelFirstPageIndex + levelPageCount) {
+            return printLevel(g, pageFormat, pageIndex - levelFirstPageIndex);
+          }
+          levelFirstPageIndex += levelPageCount;
+        }
+      }
+      return NO_SUCH_PAGE;
+    } finally {
+      // Restore selected level even if a page couldn't be rendered
+      this.home.setSelectedLevel(oldSelectedLevel);
+    }
+  }
+
+  /**
+   * Calculate page count of printing a current level with scaling
+   */
+  private int getSelectedLevelPageCount(Graphics g, PageFormat pageFormat) {
+    Rectangle2D printedItemBounds = getItemsBounds(g, getPaintedItems());
+    if (printedItemBounds == null) {
+      return 0;
+    } else if (this.home.getPrint() == null || this.home.getPrint().getPlanScale() == null) {
+      return 1;
+    } else {
+      float printScale = this.home.getPrint().getPlanScale().floatValue() * LengthUnit.centimeterToInch(72);
+      int pagesPerRow = (int)(printedItemBounds.getWidth() * printScale / pageFormat.getImageableWidth());
+      if (printedItemBounds.getWidth() * printScale != pageFormat.getImageableWidth()) {
+        pagesPerRow++;
+      }
+      int pagesPerColumn = (int)(printedItemBounds.getHeight() * printScale / pageFormat.getImageableHeight());
+      if (printedItemBounds.getHeight() * printScale != pageFormat.getImageableHeight()) {
+        pagesPerColumn++;
+      }
+      return pagesPerRow * pagesPerColumn;
+    }
+  }
+
   /**
    * Returns an image of the selected items displayed by this component 
    * (camera excepted) with no outline at scale 1/1 (1 pixel = 1cm).
